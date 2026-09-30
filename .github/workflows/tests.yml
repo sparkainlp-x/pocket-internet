@@ -1,0 +1,48 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip ruff "coverage[toml]"
+      - name: Lint
+        run: ruff check .
+      - name: Tests with coverage (fails under 90%)
+        run: |
+          python -m py_compile pocket_internet.py tests/test_pocket_internet.py
+          coverage run -m unittest discover -s tests -v
+          coverage report --fail-under=90
+      - name: Example commands
+        run: |
+          T=2026-09-30T12:00:00Z
+          S="$RUNNER_TEMP/examples"
+          mkdir -p "$S"
+          for f in examples/bundles/*.json; do python pocket_internet.py validate "$f" --as-of "$T"; done
+          python pocket_internet.py import examples/bundles/harbor-base.json --store "$S/node-a.json" --as-of "$T"
+          python pocket_internet.py import examples/bundles/expired-notice.json --store "$S/node-a.json" --as-of "$T"
+          cmp "$S/node-a.json" examples/nodes/node-a.json
+          python pocket_internet.py merge examples/nodes/node-a.json examples/nodes/node-b.json --output "$S/merged.json"
+          python pocket_internet.py list "$S/merged.json" --as-of "$T"
+          set +e
+          python pocket_internet.py import examples/bundles/conflicting-revision.json --store "$S/merged.json" --as-of "$T"
+          code=$?
+          set -e
+          test "$code" -eq 2
+      - name: pip install and run the console script
+        run: |
+          python -m pip install .
+          cd "$RUNNER_TEMP"
+          pocket-internet --version
+          pocket-internet merge "$GITHUB_WORKSPACE/examples/nodes/node-b.json" \
+            "$GITHUB_WORKSPACE/examples/nodes/node-a.json" --output ba.json
+          pocket-internet merge "$GITHUB_WORKSPACE/examples/nodes/node-a.json" \
+            "$GITHUB_WORKSPACE/examples/nodes/node-b.json" --output ab.json
+          cmp ab.json ba.json
+          pocket-internet list ab.json --as-of 2026-09-30T12:00:00Z
