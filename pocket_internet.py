@@ -1,28 +1,52 @@
 #!/usr/bin/env python3
-"""File-based demo for validating and merging small public-information bundles."""
+# Copyright (C) 2026 Jean-François Brisson / Spark AI NLP. SPDX-License-Identifier: AGPL-3.0-only
+"""File-based demo for validating and merging small public-information bundles.
+
+Local files only: nothing here opens a network connection. The bundle digest is an
+unkeyed SHA-256 checksum for spotting accidental changes; it is not a signature or MAC
+and anyone who edits a bundle can recompute it.
+"""
+
 from __future__ import annotations
 
 import argparse
 import hashlib
-import hmac
 import json
 import os
 import re
 import sys
 import tempfile
+import unicodedata
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
+
+__version__ = "1.0.0"
 
 BUNDLE_SCHEMA = "pocket-internet/bundle"
 LIBRARY_SCHEMA = "pocket-internet/library"
 VERSION = 1
 LANGUAGE_RE = re.compile(r"^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$")
+# One timestamp profile on every supported Python version: RFC 3339 date-time with
+# whole seconds and Z or a numeric offset. (datetime.fromisoformat accepts many more
+# forms on Python 3.11+ than on 3.10, so it is not used as the format check.)
+TIMESTAMP_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:Z|[+-][0-9]{2}:[0-9]{2})$")
+# Largest revision accepted: the largest integer every common JSON implementation
+# represents exactly.
+MAX_REVISION = 2**53 - 1
+# Upper bound on the size of any bundle or library file read.
+MAX_JSON_BYTES = 64 * 1024 * 1024
+EXIT_OK, EXIT_ERROR, EXIT_CONFLICT = 0, 1, 2
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-BUNDLE_KEYS = {"schema", "version", "source_label", "category", "language", "issued_at", "expires_at", "items", "digest"}
+BUNDLE_KEYS = {
+    "schema", "version", "source_label", "category", "language", "issued_at", "expires_at", "items", "digest",
+}
 ITEM_KEYS = {"item_id", "revision", "title", "text"}
-OBSERVATION_KEYS = ("source_label", "category", "language", "issued_at", "expires_at", "item_id", "revision", "content_sha256", "bundle_sha256")
+OBSERVATION_KEYS = (
+    "source_label", "category", "language", "issued_at", "expires_at", "item_id", "revision",
+    "content_sha256", "bundle_sha256",
+)
 
 
 def canonical_bytes(value: Any) -> bytes:
@@ -37,6 +61,10 @@ def content_sha256(title: str, text: str) -> str:
     return sha256_json({"title": title, "text": text})
 
 
+def _reject_constant(name: str) -> NoReturn:
+    raise ValueError(f"invalid JSON number: {name}")
+
+
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -47,8 +75,25 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def read_json(path: str | Path) -> Any:
-    with open(path, "r", encoding="utf-8") as stream:
-        return json.load(stream, object_pairs_hook=_reject_duplicate_keys)
+    """Read strict UTF-8 JSON (an optional BOM is ignored).
+
+    Duplicate keys, NaN/Infinity, invalid UTF-8, over-deep nesting and files over
+    MAX_JSON_BYTES raise ValueError; I/O problems raise OSError.
+    """
+    with open(path, "rb") as stream:
+        data = stream.read(MAX_JSON_BYTES + 1)
+    if len(data) > MAX_JSON_BYTES:
+        raise ValueError(f"{path}: file is larger than {MAX_JSON_BYTES} bytes")
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"{path}: not valid UTF-8 (byte offset {exc.start})") from None
+    try:
+        return json.loads(text, object_pairs_hook=_reject_duplicate_keys, parse_constant=_reject_constant)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path}: invalid JSON: {exc}") from None
+    except RecursionError:
+        raise ValueError(f"{path}: JSON is nested too deeply") from None
 
 
 def require_object(value: Any, where: str) -> dict[str, Any]:
@@ -68,32 +113,52 @@ def require_exact_keys(value: dict[str, Any], expected: set[str], where: str) ->
         raise ValueError(f"{where}: " + "; ".join(details))
 
 
-def require_text(value: Any, where: str, *, limit: int = 1_000_000) -> str:
+_MULTILINE_ALLOWED = frozenset("\t\n\r")
+
+
+def require_text(value: Any, where: str, *, limit: int = 1_000_000, multiline: bool = False) -> str:
+    """Non-blank text without control characters (tab/LF/CR allowed when multiline).
+
+    Control characters are rejected so that text received from another device cannot
+    carry terminal escape sequences into ``list`` output.
+    """
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{where} must be a non-empty string")
-    if "\x00" in value or len(value) > limit:
-        raise ValueError(f"{where} contains a NUL or exceeds {limit} characters")
+    if len(value) > limit:
+        raise ValueError(f"{where} exceeds {limit} characters")
+    for character in value:
+        if unicodedata.category(character) == "Cc" and not (multiline and character in _MULTILINE_ALLOWED):
+            raise ValueError(f"{where} contains a control character (U+{ord(character):04X})")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        raise ValueError(f"{where} contains an unpaired surrogate") from None
     return value
 
 
 def parse_instant(value: Any, where: str = "timestamp") -> datetime:
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"{where} must be an ISO-8601 timestamp with a timezone")
+    """Parse YYYY-MM-DDTHH:MM:SS followed by Z or +HH:MM/-HH:MM; return aware UTC."""
+    if not isinstance(value, str) or not TIMESTAMP_RE.fullmatch(value):
+        raise ValueError(
+            f"{where} must look like 2026-09-30T12:00:00Z or 2026-09-30T08:00:00-04:00; got {value!r}"
+        )
     try:
         parsed = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
-    except ValueError as exc:
-        raise ValueError(f"{where} is not a valid ISO-8601 timestamp: {value!r}") from exc
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise ValueError(f"{where} must include a timezone (for example, Z or +00:00)")
-    return parsed.astimezone(timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError) as exc:
+        raise ValueError(f"{where} is not a valid date and time: {value!r}") from exc
+
+
+def _require_aware(now: datetime | None) -> datetime:
+    if now is None:
+        return utc_now()
+    if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("the reference time must be a timezone-aware datetime")
+    return now
 
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
-
-
-def instant_text(value: datetime) -> str:
-    return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def _validate_label(value: Any, where: str) -> str:
@@ -101,6 +166,12 @@ def _validate_label(value: Any, where: str) -> str:
     if text != text.strip():
         raise ValueError(f"{where} must not start or end with whitespace")
     return text
+
+
+def _validate_revision(value: Any, where: str) -> int:
+    if type(value) is not int or not 1 <= value <= MAX_REVISION:
+        raise ValueError(f"{where} must be an integer from 1 to {MAX_REVISION}")
+    return value
 
 
 def _validate_language(value: Any) -> str:
@@ -111,7 +182,8 @@ def _validate_language(value: Any) -> str:
 
 
 def temporal_status(issued_at: str, expires_at: str, now: datetime | None = None) -> str:
-    now = now or utc_now()
+    """UPCOMING before issued_at, EXPIRED from expires_at onward, otherwise CURRENT."""
+    now = _require_aware(now)
     issued, expires = parse_instant(issued_at, "issued_at"), parse_instant(expires_at, "expires_at")
     if now < issued:
         return "UPCOMING"
@@ -145,26 +217,24 @@ def validate_bundle(bundle: Any, now: datetime | None = None) -> str:
         if item_id in seen_ids:
             raise ValueError(f"item_id {item_id!r} appears more than once in this bundle")
         seen_ids.add(item_id)
-        if type(item["revision"]) is not int or item["revision"] < 1:
-            raise ValueError(f"items[{index}].revision must be a positive integer")
+        _validate_revision(item["revision"], f"items[{index}].revision")
         require_text(item["title"], f"items[{index}].title", limit=500)
-        require_text(item["text"], f"items[{index}].text")
+        require_text(item["text"], f"items[{index}].text", multiline=True)
     digest = bundle["digest"]
     if not isinstance(digest, str) or not SHA256_RE.fullmatch(digest):
         raise ValueError("digest must be a lowercase 64-character SHA-256 hex string")
     unsigned = {key: value for key, value in bundle.items() if key != "digest"}
     expected = sha256_json(unsigned)
-    if not hmac.compare_digest(digest, expected):
+    # Plain comparison on purpose: this unkeyed checksum involves no secret, so a
+    # constant-time (hmac.compare_digest) comparison would add nothing.
+    if digest != expected:
         raise ValueError(f"bundle digest mismatch: expected {expected}, got {digest}")
-    now = now or utc_now()
-    if now < issued:
-        return "UPCOMING"
-    if now >= expires:
-        return "EXPIRED"
-    return "CURRENT"
+    return temporal_status(bundle["issued_at"], bundle["expires_at"], now)
 
 
-def make_bundle(*, source_label: str, category: str, language: str, issued_at: str, expires_at: str, items: list[dict[str, Any]]) -> dict[str, Any]:
+def make_bundle(
+    *, source_label: str, category: str, language: str, issued_at: str, expires_at: str, items: list[dict[str, Any]]
+) -> dict[str, Any]:
     """Build a bundle and compute its digest; primarily useful for fixtures and examples."""
     payload = {"schema": BUNDLE_SCHEMA, "version": VERSION, "source_label": source_label,
                "category": category, "language": language, "issued_at": issued_at,
@@ -182,10 +252,10 @@ def _validate_observation(observation: Any, index: int, content: dict[str, Any])
     require_exact_keys(observation, set(OBSERVATION_KEYS), where)
     _validate_label(observation["source_label"], f"{where}.source_label")
     _validate_label(observation["category"], f"{where}.category")
+    _validate_label(observation["language"], f"{where}.language")
     _validate_language(observation["language"])
     _validate_label(observation["item_id"], f"{where}.item_id")
-    if type(observation["revision"]) is not int or observation["revision"] < 1:
-        raise ValueError(f"{where}.revision must be a positive integer")
+    _validate_revision(observation["revision"], f"{where}.revision")
     issued = parse_instant(observation["issued_at"], f"{where}.issued_at")
     expires = parse_instant(observation["expires_at"], f"{where}.expires_at")
     if expires <= issued:
@@ -209,7 +279,7 @@ def validate_library(library: Any) -> dict[str, Any]:
         blob = require_object(blob_value, f"content[{digest}]")
         require_exact_keys(blob, {"title", "text"}, f"content[{digest}]")
         title = require_text(blob["title"], f"content[{digest}].title", limit=500)
-        text = require_text(blob["text"], f"content[{digest}].text")
+        text = require_text(blob["text"], f"content[{digest}].text", multiline=True)
         if content_sha256(title, text) != digest:
             raise ValueError(f"content digest mismatch for {digest}")
     observations = library["observations"]
@@ -222,6 +292,10 @@ def validate_library(library: Any) -> dict[str, Any]:
         if key in seen:
             raise ValueError(f"duplicate observation at index {index}")
         seen.add(key)
+    referenced = {observation["content_sha256"] for observation in observations}
+    orphaned = sorted(set(content) - referenced)
+    if orphaned:
+        raise ValueError(f"library.content has entries no observation refers to: {', '.join(orphaned)}")
     return library
 
 
@@ -229,11 +303,25 @@ def observation_key(observation: dict[str, Any]) -> tuple[Any, ...]:
     return tuple(observation[field] for field in OBSERVATION_KEYS)
 
 
+def _observation_sort_key(observation: dict[str, Any]) -> tuple[Any, ...]:
+    """Total order: readable fields first, times by instant, then every field as a tie-break."""
+    return (
+        observation["source_label"].casefold(),
+        observation["item_id"],
+        observation["revision"],
+        observation["content_sha256"],
+        parse_instant(observation["issued_at"]),
+        parse_instant(observation["expires_at"]),
+        observation_key(observation),
+    )
+
+
 def _sort_observations(observations: list[dict[str, Any]]) -> None:
-    observations.sort(key=lambda o: (o["source_label"].casefold(), o["item_id"], o["revision"], o["content_sha256"], o["issued_at"], o["expires_at"], o["bundle_sha256"]))
+    observations.sort(key=_observation_sort_key)
 
 
 def import_bundle(library: dict[str, Any], bundle: Any, now: datetime | None = None) -> tuple[int, int, str]:
+    """Add a validated bundle's items to ``library`` in place; return (added, skipped, status)."""
     validate_library(library)
     status = validate_bundle(bundle, now)
     known = {observation_key(obs) for obs in library["observations"]}
@@ -265,6 +353,9 @@ def import_bundle(library: dict[str, Any], bundle: Any, now: datetime | None = N
 
 
 def merge_libraries(left: Any, right: Any) -> tuple[dict[str, Any], int]:
+    """Union two libraries. The result does not depend on argument order, merging a
+    library with itself or with an earlier merge result adds nothing, and grouping
+    does not matter: merge(merge(a, b), c) == merge(a, merge(b, c))."""
     left, right = validate_library(left), validate_library(right)
     merged = empty_library()
     for library in (left, right):
@@ -272,7 +363,7 @@ def merge_libraries(left: Any, right: Any) -> tuple[dict[str, Any], int]:
             existing = merged["content"].get(digest)
             if existing is not None and existing != blob:
                 raise ValueError(f"SHA-256 content collision for {digest}")
-            merged["content"][digest] = blob
+            merged["content"][digest] = dict(blob)
     seen: set[tuple[Any, ...]] = set()
     duplicates = 0
     for observation in left["observations"] + right["observations"]:
@@ -298,62 +389,109 @@ def conflicts(library: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _variant_status(observations: list[dict[str, Any]], *, latest: bool, conflict: bool, now: datetime) -> str:
-    states = [temporal_status(o["issued_at"], o["expires_at"], now) for o in observations]
-    suffix = "EXPIRED" if all(state == "EXPIRED" for state in states) else "UPCOMING" if all(state == "UPCOMING" for state in states) else "ACTIVE WINDOW"
+def _window_summary(states: list[str]) -> str:
+    """ACTIVE WINDOW if any window is open now, else UPCOMING if any is still to come, else EXPIRED."""
+    if "CURRENT" in states:
+        return "ACTIVE WINDOW"
+    if "UPCOMING" in states:
+        return "UPCOMING"
+    return "EXPIRED"
+
+
+def _variant_status(states: list[str], *, superseded: bool, conflict: bool) -> str:
+    window = _window_summary(states)
     if conflict:
-        return f"CONFLICT; {suffix}"
-    if not latest:
-        return "SUPERSEDED" + ("; EXPIRED" if suffix == "EXPIRED" else "; UPCOMING" if suffix == "UPCOMING" else "")
-    return "CURRENT" if suffix == "ACTIVE WINDOW" else suffix
+        return f"CONFLICT; {window}"
+    if superseded:
+        return "SUPERSEDED" + ("" if window == "ACTIVE WINDOW" else f"; {window}")
+    return "CURRENT" if window == "ACTIVE WINDOW" else window
 
 
 def listing_rows(library: dict[str, Any], now: datetime | None = None) -> list[dict[str, Any]]:
+    """One row per (identity, revision, content) with its status at ``now``.
+
+    A revision is superseded once a higher revision of the same identity has been
+    issued (at least one of its observations has issued_at <= now). A higher revision
+    that is still UPCOMING does not yet supersede the one in effect.
+    """
     validate_library(library)
-    now = now or utc_now()
-    identity_revisions: dict[tuple[str, str], set[int]] = defaultdict(set)
+    now = _require_aware(now)
+    started_revisions: dict[tuple[str, str], set[int]] = defaultdict(set)
     variants: dict[tuple[str, str, int, str], list[dict[str, Any]]] = defaultdict(list)
     revision_digests: dict[tuple[str, str, int], set[str]] = defaultdict(set)
     for obs in library["observations"]:
         identity = (obs["source_label"], obs["item_id"])
         revision = (obs["source_label"], obs["item_id"], obs["revision"])
-        identity_revisions[identity].add(obs["revision"])
+        if parse_instant(obs["issued_at"]) <= now:
+            started_revisions[identity].add(obs["revision"])
         revision_digests[revision].add(obs["content_sha256"])
         variants[(*revision, obs["content_sha256"])].append(obs)
     rows: list[dict[str, Any]] = []
     for key, observations in variants.items():
         source, item_id, revision, digest = key
-        latest = revision == max(identity_revisions[(source, item_id)])
+        started = started_revisions.get((source, item_id))
+        superseded = bool(started) and revision < max(started)
         conflict = len(revision_digests[(source, item_id, revision)]) > 1
-        ordered = sorted(observations, key=lambda o: (o["issued_at"], o["expires_at"], o["bundle_sha256"]))
+        ordered = sorted(observations, key=_observation_sort_key_by_time)
+        states = [temporal_status(o["issued_at"], o["expires_at"], now) for o in ordered]
         rows.append({
             "source_label": source, "item_id": item_id, "revision": revision,
             "content_sha256": digest,
-            "status": _variant_status(observations, latest=latest, conflict=conflict, now=now),
+            "status": _variant_status(states, superseded=superseded, conflict=conflict),
             "category": ordered[-1]["category"], "language": ordered[-1]["language"],
             "observations": len(observations),
-            "windows": sorted({(obs["issued_at"], obs["expires_at"], temporal_status(obs["issued_at"], obs["expires_at"], now)) for obs in observations}),
+            "windows": _dedupe_windows(ordered, states),
         })
-    return sorted(rows, key=lambda row: (row["source_label"].casefold(), row["item_id"], row["revision"], row["content_sha256"]))
+    return sorted(rows, key=lambda row: (row["source_label"].casefold(), row["source_label"], row["item_id"],
+                                         row["revision"], row["content_sha256"]))
+
+
+def _observation_sort_key_by_time(observation: dict[str, Any]) -> tuple[Any, ...]:
+    return (parse_instant(observation["issued_at"]), parse_instant(observation["expires_at"]),
+            observation_key(observation))
+
+
+def _dedupe_windows(ordered: list[dict[str, Any]], states: list[str]) -> list[tuple[str, str, str]]:
+    windows: list[tuple[str, str, str]] = []
+    for obs, state in zip(ordered, states, strict=True):
+        window = (obs["issued_at"], obs["expires_at"], state)
+        if window not in windows:
+            windows.append(window)
+    return windows
+
+
+def render_library(library: dict[str, Any]) -> str:
+    """Deterministic JSON text for a library: sorted keys, 2-space indent, final newline."""
+    return json.dumps(library, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
 def write_library(path: str | Path, library: dict[str, Any]) -> None:
+    """Validate, then write via a temporary file in the same directory and os.replace.
+
+    Readers see either the old or the new file, never a partial one. This does not
+    serialize concurrent writers: two imports into one store at the same time can
+    lose one of the updates.
+    """
     validate_library(library)
+    text = render_library(library)
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     temp_name: str | None = None
     try:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=target.parent, prefix=f".{target.name}.", suffix=".tmp", delete=False) as stream:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\n", dir=target.parent,
+                                         prefix=f".{target.name}.", suffix=".tmp", delete=False) as stream:
             temp_name = stream.name
-            json.dump(library, stream, ensure_ascii=False, indent=2, sort_keys=True)
-            stream.write("\n")
+            stream.write(text)
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temp_name, target)
-    except Exception:
-        if temp_name and os.path.exists(temp_name):
-            os.unlink(temp_name)
-        raise
+        temp_name = None
+    finally:
+        if temp_name is not None:
+            try:
+                os.unlink(temp_name)
+            except OSError:
+                pass
 
 
 def load_library(path: str | Path, *, allow_missing: bool = False) -> dict[str, Any]:
@@ -364,7 +502,7 @@ def load_library(path: str | Path, *, allow_missing: bool = False) -> dict[str, 
 
 
 def _as_of(value: str | None) -> datetime:
-    return parse_instant(value, "--as-of") if value else utc_now()
+    return utc_now() if value is None else parse_instant(value, "--as-of")
 
 
 def _print_conflicts(library: dict[str, Any]) -> int:
@@ -381,7 +519,7 @@ def command_validate(args: argparse.Namespace) -> int:
     print(f"VALID {args.bundle}: {len(bundle['items'])} item(s); bundle status: {status}.")
     if status == "EXPIRED":
         print("Expired bundle: retained for review, not current information.")
-    return 0
+    return EXIT_OK
 
 
 def command_import(args: argparse.Namespace) -> int:
@@ -389,10 +527,11 @@ def command_import(args: argparse.Namespace) -> int:
     library = load_library(args.store, allow_missing=True)
     added, skipped, status = import_bundle(library, bundle, _as_of(args.as_of))
     write_library(args.store, library)
-    print(f"Imported {args.bundle} into {args.store}: {added} new observation(s), {skipped} duplicate(s); bundle status: {status}.")
+    print(f"Imported {args.bundle} into {args.store}: {added} new observation(s), {skipped} duplicate(s); "
+          f"bundle status: {status}.")
     if status == "EXPIRED":
         print("Expired bundle: stored for review, not current information.")
-    return 2 if _print_conflicts(library) else 0
+    return EXIT_CONFLICT if _print_conflicts(library) else EXIT_OK
 
 
 def command_merge(args: argparse.Namespace) -> int:
@@ -402,7 +541,7 @@ def command_merge(args: argparse.Namespace) -> int:
     print(f"Merged {args.store_a} + {args.store_b} -> {args.output}: "
           f"{len(merged['observations'])} observation(s), {len(merged['content'])} unique content object(s), "
           f"{duplicates} duplicate observation(s) skipped.")
-    return 2 if _print_conflicts(merged) else 0
+    return EXIT_CONFLICT if _print_conflicts(merged) else EXIT_OK
 
 
 def command_list(args: argparse.Namespace) -> int:
@@ -412,19 +551,33 @@ def command_list(args: argparse.Namespace) -> int:
         print("Library is empty.")
         return 0
     for row in rows:
-        periods = ", ".join(f"{issued}..{expires} [{('ACTIVE WINDOW' if state == 'CURRENT' else state)}]" for issued, expires, state in row["windows"])
+        periods = ", ".join(
+            f"{issued}..{expires} [{'ACTIVE WINDOW' if state == 'CURRENT' else state}]"
+            for issued, expires, state in row["windows"]
+        )
         blob = library["content"][row["content_sha256"]]
         print(f"[{row['status']}] {row['source_label']}/{row['item_id']}@{row['revision']} "
-              f"({row['category']}/{row['language']}; {row['observations']} bundle observation(s); {periods}) — {blob['title']}")
+              f"({row['category']}/{row['language']}; {row['observations']} bundle observation(s); {periods}) "
+              f"— {blob['title']}")
         for line in blob["text"].splitlines() or [""]:
             print(f"  {line}")
     count = _print_conflicts(library)
-    return 2 if count else 0
+    return EXIT_CONFLICT if count else EXIT_OK
+
+
+class _Parser(argparse.ArgumentParser):
+    """Usage errors exit 1 so that exit code 2 always means "conflict found"."""
+
+    def error(self, message: str) -> NoReturn:
+        self.print_usage(sys.stderr)
+        self.exit(EXIT_ERROR, f"{self.prog}: error: {message}\n")
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Validate and merge Pocket Internet JSON bundles using local files only.")
-    commands = parser.add_subparsers(dest="command", required=True)
+    parser = _Parser(prog="pocket-internet",
+                     description="Validate and merge Pocket Internet JSON bundles using local files only.")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    commands = parser.add_subparsers(dest="command", required=True, parser_class=_Parser)
     validate_parser = commands.add_parser("validate", help="validate a bundle and report its time status")
     validate_parser.add_argument("bundle")
     validate_parser.add_argument("--as-of", help="override current time (ISO-8601 with timezone)")
@@ -449,11 +602,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    # Never fail half-way through printing because the console cannot encode a title.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(errors="backslashreplace")
     try:
         return args.handler(args)
-    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
-        return 1
+        return EXIT_ERROR
 
 
 if __name__ == "__main__":
