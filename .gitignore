@@ -3,3 +3,7 @@ __pycache__/
 .coverage
 .venv/
 *.tmp
+.ruff_cache/
+*.egg-info/
+build/
+dist/
