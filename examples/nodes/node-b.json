@@ -1,0 +1,38 @@
+{
+  "content": {
+    "0d7870ced9ccb0435481737b1c2b266e013da6a7b6f6f6016ef82a394cc4dad8": {
+      "text": "Pickup moved to the west community hall, 09:00–17:00.",
+      "title": "Potable water pickup"
+    },
+    "ec6e3fe527d27a0d70b4540862a14f2561830147c9b9bcbc031671ce8d659ac9": {
+      "text": "The reading room is open Tuesday through Saturday, 10:00–16:00.",
+      "title": "Community library hours"
+    }
+  },
+  "observations": [
+    {
+      "bundle_sha256": "aa5c42cb0eabc42d55557b0cfebb69d81cca9601729bce368cd243e2bfc4e62f",
+      "category": "community-services",
+      "content_sha256": "ec6e3fe527d27a0d70b4540862a14f2561830147c9b9bcbc031671ce8d659ac9",
+      "expires_at": "2026-10-15T00:00:00Z",
+      "issued_at": "2026-09-30T09:00:00Z",
+      "item_id": "library-hours",
+      "language": "en",
+      "revision": 1,
+      "source_label": "Harbor Mutual Aid"
+    },
+    {
+      "bundle_sha256": "aa5c42cb0eabc42d55557b0cfebb69d81cca9601729bce368cd243e2bfc4e62f",
+      "category": "community-services",
+      "content_sha256": "0d7870ced9ccb0435481737b1c2b266e013da6a7b6f6f6016ef82a394cc4dad8",
+      "expires_at": "2026-10-15T00:00:00Z",
+      "issued_at": "2026-09-30T09:00:00Z",
+      "item_id": "water-point",
+      "language": "en",
+      "revision": 2,
+      "source_label": "Harbor Mutual Aid"
+    }
+  ],
+  "schema": "pocket-internet/library",
+  "version": 1
+}

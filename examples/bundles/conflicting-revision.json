@@ -1,0 +1,18 @@
+{
+  "category": "community-services",
+  "digest": "15198eaac489389fb81b2624a039950a836f12327197c886304c0842ad528d35",
+  "expires_at": "2026-10-15T00:00:00Z",
+  "issued_at": "2026-09-30T10:00:00Z",
+  "items": [
+    {
+      "item_id": "water-point",
+      "revision": 2,
+      "text": "Alternative revision for the demo: pickup is at the north school.",
+      "title": "Potable water pickup"
+    }
+  ],
+  "language": "en",
+  "schema": "pocket-internet/bundle",
+  "source_label": "Harbor Mutual Aid",
+  "version": 1
+}

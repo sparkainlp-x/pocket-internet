@@ -1,0 +1,18 @@
+{
+  "category": "transport",
+  "digest": "a7e028d49240a7e43b99312fe8c5b7ca08a1279167d167f6eb6aaac68a11edf0",
+  "expires_at": "2026-09-01T00:00:00Z",
+  "issued_at": "2026-08-01T08:00:00Z",
+  "items": [
+    {
+      "item_id": "road-closure",
+      "revision": 1,
+      "text": "Example notice: the old ferry road closure ended on 2026-08-31.",
+      "title": "Temporary road closure (expired)"
+    }
+  ],
+  "language": "en",
+  "schema": "pocket-internet/bundle",
+  "source_label": "Harbor Mutual Aid",
+  "version": 1
+}

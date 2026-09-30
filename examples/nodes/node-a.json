@@ -1,0 +1,53 @@
+{
+  "content": {
+    "9dedcad6ae9ede9dbb9ddac27aaab4169e0982a4e92c36442d3d76251376c6d5": {
+      "text": "Pickup is at the east community hall, 08:00–18:00.",
+      "title": "Potable water pickup"
+    },
+    "b1761f644da363f1773c65b91f1b4faf6f2c672ca8d51d24d577aedcdcdba801": {
+      "text": "Example notice: the old ferry road closure ended on 2026-08-31.",
+      "title": "Temporary road closure (expired)"
+    },
+    "ec6e3fe527d27a0d70b4540862a14f2561830147c9b9bcbc031671ce8d659ac9": {
+      "text": "The reading room is open Tuesday through Saturday, 10:00–16:00.",
+      "title": "Community library hours"
+    }
+  },
+  "observations": [
+    {
+      "bundle_sha256": "f831a0089c6af1c1e752ae282625bbdddeda30ab6652fc5da1a2c737c0b301ab",
+      "category": "community-services",
+      "content_sha256": "ec6e3fe527d27a0d70b4540862a14f2561830147c9b9bcbc031671ce8d659ac9",
+      "expires_at": "2026-10-12T00:00:00Z",
+      "issued_at": "2026-09-28T08:00:00Z",
+      "item_id": "library-hours",
+      "language": "en",
+      "revision": 1,
+      "source_label": "Harbor Mutual Aid"
+    },
+    {
+      "bundle_sha256": "a7e028d49240a7e43b99312fe8c5b7ca08a1279167d167f6eb6aaac68a11edf0",
+      "category": "transport",
+      "content_sha256": "b1761f644da363f1773c65b91f1b4faf6f2c672ca8d51d24d577aedcdcdba801",
+      "expires_at": "2026-09-01T00:00:00Z",
+      "issued_at": "2026-08-01T08:00:00Z",
+      "item_id": "road-closure",
+      "language": "en",
+      "revision": 1,
+      "source_label": "Harbor Mutual Aid"
+    },
+    {
+      "bundle_sha256": "f831a0089c6af1c1e752ae282625bbdddeda30ab6652fc5da1a2c737c0b301ab",
+      "category": "community-services",
+      "content_sha256": "9dedcad6ae9ede9dbb9ddac27aaab4169e0982a4e92c36442d3d76251376c6d5",
+      "expires_at": "2026-10-12T00:00:00Z",
+      "issued_at": "2026-09-28T08:00:00Z",
+      "item_id": "water-point",
+      "language": "en",
+      "revision": 1,
+      "source_label": "Harbor Mutual Aid"
+    }
+  ],
+  "schema": "pocket-internet/library",
+  "version": 1
+}
