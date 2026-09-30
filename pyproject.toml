@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pocket-internet"
+dynamic = ["version"]
+description = "Offline, stdlib-only demo for validating, importing and merging small public-information JSON bundles carried between disconnected devices; checksums, not signatures"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+authors = [{ name = "Jean-François Brisson" }]
+keywords = ["offline-first", "sneakernet", "merge", "public-information", "json"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/sparkainlp-x/pocket-internet"
+
+[project.scripts]
+pocket-internet = "pocket_internet:main"
+
+[tool.setuptools]
+py-modules = ["pocket_internet"]
+
+[tool.setuptools.dynamic]
+version = { attr = "pocket_internet.__version__" }
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# The original test file is kept byte-for-byte as received.
+"tests/test_pocket_internet.py" = ["E501", "F401"]
+
+[tool.coverage.run]
+branch = true
+include = ["pocket_internet.py"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true

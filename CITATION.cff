@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+title: "Pocket Internet"
+type: software
+authors:
+  - family-names: "Brisson"
+    given-names: "Jean-François"
+    orcid: "https://orcid.org/0009-0000-9778-5374"
+    affiliation: "Spark AI NLP"
+version: 1.0.0
+date-released: "2026-09-30"
+license: AGPL-3.0-only
+repository-code: "https://github.com/sparkainlp-x/pocket-internet"
+abstract: "Offline, standard-library-only demo for validating small public-information JSON bundles, importing them into local file libraries, and merging libraries carried between disconnected devices, with explicit expiry, supersession, and revision-conflict reporting. Its SHA-256 digests detect accidental changes only; they are not signatures and do not establish authenticity."
+keywords:
+  - offline-first
+  - sneakernet
+  - merge
+  - public-information
+  - json
