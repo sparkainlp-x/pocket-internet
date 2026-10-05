@@ -1,6 +1,9 @@
 # Pocket Internet
 
 [![tests](https://github.com/sparkainlp-x/pocket-internet/actions/workflows/tests.yml/badge.svg)](https://github.com/sparkainlp-x/pocket-internet/actions/workflows/tests.yml)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![Status: research prototype](https://img.shields.io/badge/status-research%20prototype-orange.svg)](#install)
+[![Evidence: SYNTHETIC](https://img.shields.io/badge/evidence-SYNTHETIC-blue.svg)](#install)
 
 Pocket Internet is a small, file-based demo for communities that carry compact public-information bundles between devices that may be disconnected, then merge the resulting local libraries later. It uses only Python's standard library. Devices exchange files manually; the program never opens a network connection or polls for updates.
 
