@@ -7,6 +7,14 @@ authors:
     given-names: "Jean-François"
     orcid: "https://orcid.org/0009-0000-9778-5374"
     affiliation: "Spark AI NLP"
+doi: 10.5281/zenodo.23187284
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23187284
+    description: "Concept DOI (all versions)"
+  - type: doi
+    value: 10.5281/zenodo.23187285
+    description: "Version DOI for v1.0.0"
 version: 1.0.0
 date-released: "2026-10-06"
 license: AGPL-3.0-only
