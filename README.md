@@ -115,7 +115,7 @@ Pocket Internet is a small, dependency-free, readable demonstration of carrying 
 
 ## Citation
 
-See [CITATION.cff](CITATION.cff). Archived on Zenodo: concept DOI [10.5281/zenodo.23187284](https://doi.org/10.5281/zenodo.23187284) (all versions); v1.0.0: [10.5281/zenodo.23187285](https://doi.org/10.5281/zenodo.23187285).
+See [CITATION.cff](CITATION.cff). Archived on Zenodo: concept DOI [10.5281/zenodo.23187284](https://doi.org/10.5281/zenodo.23187284) (all versions); v1.0.1: [10.5281/zenodo.23241622](https://doi.org/10.5281/zenodo.23241622); v1.0.0: [10.5281/zenodo.23187285](https://doi.org/10.5281/zenodo.23187285).
 
 ## License
 
