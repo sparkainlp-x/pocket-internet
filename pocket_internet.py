@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NoReturn
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 BUNDLE_SCHEMA = "pocket-internet/bundle"
 LIBRARY_SCHEMA = "pocket-internet/library"

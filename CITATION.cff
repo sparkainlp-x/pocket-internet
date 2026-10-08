@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it using the metadata from this file."
-title: "Pocket Internet"
+title: "Pocket Internet: offline exchange and merge of public-information bundles between disconnected devices"
 type: software
 authors:
   - family-names: "Brisson"
@@ -15,8 +15,8 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.23187285
     description: "Version DOI for v1.0.0"
-version: 1.0.0
-date-released: "2026-10-06"
+version: 1.0.1
+date-released: "2026-10-08"
 license: AGPL-3.0-only
 repository-code: "https://github.com/sparkainlp-x/pocket-internet"
 abstract: "Offline, standard-library-only demo for validating small public-information JSON bundles, importing them into local file libraries, and merging libraries carried between disconnected devices, with explicit expiry, supersession, and revision-conflict reporting. Its SHA-256 digests detect accidental changes only; they are not signatures and do not establish authenticity."

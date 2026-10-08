@@ -1,9 +1,9 @@
 {
   "upload_type": "software",
-  "title": "Pocket Internet",
-  "version": "1.0.0",
-  "publication_date": "2026-10-06",
-  "description": "<p>Pocket Internet is an offline, standard-library-only Python demo for validating small public-information JSON bundles, importing them into local file libraries, and merging libraries carried between disconnected devices, with explicit expiry, supersession, and revision-conflict reporting. Devices exchange files manually; the program never opens a network connection.</p><p><strong>Scope and limits.</strong> Research prototype. Its SHA-256 digests detect accidental changes only; they are not signatures and do not establish authenticity, safety, or truth of any message. Example bundles are SYNTHETIC; no field deployment or empirical performance is claimed.</p>",
+  "title": "Pocket Internet: offline exchange and merge of public-information bundles between disconnected devices",
+  "version": "1.0.1",
+  "publication_date": "2026-10-08",
+  "description": "<p>Pocket Internet is a small, file-based demo for communities that carry compact public-information bundles between devices that may be disconnected, then merge the resulting local libraries later. It validates JSON bundles, imports them into local library files, lists content with its time status, and merges libraries with explicit handling of expiry, supersession and revision conflicts. Devices exchange files manually; the program never opens a network connection.</p><p>Scope: this demonstrates offline file transport and merge logic only. There is no radio, mesh networking, encryption or signatures; SHA-256 digests detect accidental changes but do not prove authorship or that a message is accurate. The example bundles are fictional.</p><p>Usage: Python 3.10 or later, standard library only; <code>pip install .</code> adds a <code>pocket-internet</code> command. Try <code>python3 pocket_internet.py merge examples/nodes/node-a.json examples/nodes/node-b.json --output /tmp/merged.json</code>. Tests: <code>python3 -m unittest discover -s tests -v</code> (run in CI on Python 3.10 to 3.13 with coverage).</p><p>Citation: cite the concept DOI <a href=\"https://doi.org/10.5281/zenodo.23187284\">10.5281/zenodo.23187284</a> for all versions, or the version DOI of the release you used. Source code: <a href=\"https://github.com/sparkainlp-x/pocket-internet\">github.com/sparkainlp-x/pocket-internet</a>. Licence: AGPL-3.0-only; commercial licensing is available (see COMMERCIAL-LICENSE.md).</p>",
   "creators": [
     {
       "name": "Brisson, Jean-François",
@@ -14,14 +14,14 @@
   "access_right": "open",
   "license": "AGPL-3.0-only",
   "keywords": [
-    "Pocket Internet",
     "offline-first",
     "sneakernet",
-    "merge",
+    "data synchronization",
+    "merge conflicts",
     "public information",
+    "community resilience",
     "JSON",
-    "Python",
-    "research software"
+    "Python"
   ],
   "related_identifiers": [
     {
@@ -35,5 +35,6 @@
     {
       "identifier": "spark-ai-nlp"
     }
-  ]
+  ],
+  "notes": "Evidence status: SYNTHETIC example data; no field performance is claimed. Commercial licensing: see COMMERCIAL-LICENSE.md."
 }
